@@ -12,46 +12,18 @@ import (
 )
 
 func main() {
-    // Create uploads directory if it doesn't exist
     uploadsDir := "uploads"
     if err := os.MkdirAll(uploadsDir, 0755); err != nil {
         log.Fatal("Failed to create uploads directory:", err)
     }
 
-    // Initialize storage implementations
     localStorage := storage.NewLocalStorage(uploadsDir)
     memoryStorage := storage.NewInMemoryStorage()
-
-    // Initialize handlers
     fileHandler := handlers.NewFileHandler(localStorage, memoryStorage)
 
-    // Setup router
     r := mux.NewRouter()
 
-	// Simple home page
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "text/html")
-    w.Write([]byte(`
-        <h1>Cloud File Manager API</h1>
-        <p>Server is running!</p>
-        <h2>Available Endpoints:</h2>
-        <ul>
-            <li>GET <a href="/api/files?storage=local">/api/files?storage=local</a> - List files</li>
-            <li>GET /api/files/{filename}?storage=local - Download file</li>
-            <li>POST /api/upload - Upload file</li>
-            <li>DELETE /api/files/{filename}?storage=local - Delete file</li>
-        </ul>
-    `))
-	})
-
-    // API routes
-    api := r.PathPrefix("/api").Subrouter()
-    api.HandleFunc("/files", fileHandler.HandleListFiles).Methods("GET")
-    api.HandleFunc("/files/{filename}", fileHandler.HandleDownload).Methods("GET")
-    api.HandleFunc("/files/{filename}", fileHandler.HandleDelete).Methods("DELETE")
-    api.HandleFunc("/upload", fileHandler.HandleUpload).Methods("POST")
-
-    // Basic CORS headers (for now)
+    // CORS middleware
     r.Use(func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -67,13 +39,23 @@ func main() {
         })
     })
 
-    log.Println("Server starting on http://localhost:8080")
-    log.Println("API endpoints:")
-    log.Println("  GET    /api/files?storage=local")
-    log.Println("  GET    /api/files/{filename}?storage=local")
-    log.Println("  DELETE /api/files/{filename}?storage=local")
-    log.Println("  POST   /api/upload")
+    // API routes
+    api := r.PathPrefix("/api").Subrouter()
+    api.HandleFunc("/files", fileHandler.HandleListFiles).Methods("GET")
+    api.HandleFunc("/files/{filename}", fileHandler.HandleDownload).Methods("GET")
+    api.HandleFunc("/files/{filename}", fileHandler.HandleDelete).Methods("DELETE")
+    api.HandleFunc("/upload", fileHandler.HandleUpload).Methods("POST")
+
+    // Serve static files
+    r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", 
+        http.FileServer(http.Dir("./web/static/"))))
     
+    // Serve index.html for root
+    r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "./web/index.html")
+    })
+
+    log.Println("Server starting on http://localhost:8080")
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 

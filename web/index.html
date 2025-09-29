@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud File Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Cloud File Manager</h1>
+            <div class="storage-selector">
+                <label for="storageType">Storage:</label>
+                <select id="storageType">
+                    <option value="local">Local Storage</option>
+                    <option value="memory">Memory Storage</option>
+                </select>
+                <button id="refreshBtn" class="btn">Refresh</button>
+            </div>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-zone-content">
+                        <div class="upload-icon">📁</div>
+                        <p>Drag & drop files here or <span class="browse-link" id="browseBtn">browse</span></p>
+                        <input type="file" id="fileInput" multiple hidden>
+                    </div>
+                </div>
+                <div class="upload-progress" id="uploadProgress" hidden>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <span class="progress-text" id="progressText">Uploading...</span>
+                </div>
+            </section>
+
+            <section class="files-section">
+                <div class="toolbar">
+                    <input type="search" id="searchInput" placeholder="Search files..." class="search-input">
+                    <span class="file-count" id="fileCount">0 files</span>
+                </div>
+
+                <div class="files-container">
+                    <table class="files-table" id="filesTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="filesList">
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-icon">📭</div>
+                        <p>No files found</p>
+                        <p class="empty-subtitle">Upload some files to get started</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
