@@ -3,7 +3,7 @@ package models
 import "time"
 
 type FileInfo struct{
-	Name		 string	   `jason:"name"` //file name
+	Name		 string	   `json:"name"` //file name
 	Size         int64     `json:"size"` //file size in bytes
 	Path         string    `json:"path"` //file path
 	IsDir 	     bool      `json:"isDir"` //is directory
@@ -11,10 +11,10 @@ type FileInfo struct{
 
 }
 
-type UploadRespopnse struct{
+type UploadResponse struct{
 	Success bool `json:"success"` //to indicate if upload was successful
-	Message string `jason:"message"` //human readable message
-	FileName string `json:"fileName"` //name of the uploaded file
+	Message string `json:"message"` //human readable message
+	Filename string `json:"filename"` //name of the uploaded file
 }
 
 type ErrorResponse struct{
