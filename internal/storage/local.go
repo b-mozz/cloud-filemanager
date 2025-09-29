@@ -4,12 +4,14 @@ import(
 	"os"
 	"io"
 	"fmt"
+	"sync"
 	"path/filepath"
 	"cloud-filemanager/internal/models"
 )
 
 type LocalStorage struct{
 	basePath string //base directory for storing files
+	mutex sync.RWMutex //to protect concurrent access
 }
 
 func NewLocalStorage(path string) *LocalStorage{
@@ -20,7 +22,10 @@ func(ls *LocalStorage) GetStorageType() string{
 	return "Local"
 }
 
-func(ls *LocalStorage) SaveFile(fileName string, src io.Reader) error{ //return type error 
+func(ls *LocalStorage) SaveFile(fileName string, src io.Reader) error{ //return type error
+	
+	ls.mutex.Lock() //lock for writing
+	defer ls.mutex.Unlock() //ensure unlock after operation
 	
 	//security check: prevent directory traversal attacks
 	if filepath.IsAbs(fileName) || fileName == ".." || filepath.Clean(fileName) != fileName{
