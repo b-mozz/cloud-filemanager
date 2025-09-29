@@ -32,9 +32,15 @@ Thumbs.db
 # Project specific
 uploads/*
 !uploads/.gitkeep
-database.db
 *.log
+
+# Docker
+.dockerignore
 
 # Environment files
 .env
 .env.local
+
+# Temporary files
+*.tmp
+*~
