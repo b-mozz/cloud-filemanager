@@ -1,309 +1,366 @@
-// File Manager Application
-// Handles file upload, download, delete, and listing operations
-// Supports both local and in-memory storage backends
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
 
-class FileManager {
-    constructor() {
-        this.apiBase = '/api';
-        this.currentStorage = 'local';
-        this.files = [];
-        this.init();
-    }
+var currentStorage = 'local';
+var allFiles = [];
 
-    // Initialize application event listeners and load initial data
-    init() {
-        this.bindEventListeners();
-        this.loadFiles();
-    }
+// ============================================
+// INITIALIZATION - Runs when page loads
+// ============================================
 
-    // Set up all DOM event listeners
-    bindEventListeners() {
-        // Storage type selector
-        const storageSelect = document.getElementById('storageType');
-        storageSelect.addEventListener('change', (e) => {
-            this.currentStorage = e.target.value;
-            this.loadFiles();
-        });
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('File manager loaded');
+    setupEventListeners();
+    loadFiles();
+});
 
-        // Refresh button
-        const refreshBtn = document.getElementById('refreshBtn');
-        refreshBtn.addEventListener('click', () => this.loadFiles());
+// ============================================
+// EVENT LISTENERS SETUP
+// ============================================
 
-        // File input and drag-drop functionality
-        const fileInput = document.getElementById('fileInput');
-        const dropZone = document.getElementById('dropZone');
-        const browseBtn = document.getElementById('browseBtn');
-
-        browseBtn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files));
-
-        // Drag and drop events
-        dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
-        dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
-        dropZone.addEventListener('drop', this.handleDrop.bind(this));
-
-        // Search functionality
-        const searchInput = document.getElementById('searchInput');
-        searchInput.addEventListener('input', (e) => this.filterFiles(e.target.value));
-
-        // Notification close button
-        const notificationClose = document.getElementById('notificationClose');
-        notificationClose.addEventListener('click', () => this.hideNotification());
-    }
-
-    // Handle drag over event for file drop zone
-    handleDragOver(e) {
+function setupEventListeners() {
+    // Storage selector
+    var storageSelect = document.getElementById('storageType');
+    storageSelect.addEventListener('change', function() {
+        currentStorage = storageSelect.value;
+        loadFiles();
+    });
+    
+    // Refresh button
+    var refreshBtn = document.getElementById('refreshBtn');
+    refreshBtn.addEventListener('click', function() {
+        loadFiles();
+    });
+    
+    // Browse button and file input
+    var browseBtn = document.getElementById('browseBtn');
+    var fileInput = document.getElementById('fileInput');
+    
+    browseBtn.addEventListener('click', function() {
+        fileInput.click();
+    });
+    
+    fileInput.addEventListener('change', function() {
+        var files = fileInput.files;
+        if (files.length > 0) {
+            uploadFiles(files);
+        }
+    });
+    
+    // Drag and drop
+    var dropZone = document.getElementById('dropZone');
+    
+    dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.add('drag-over');
-    }
-
-    // Handle drag leave event for file drop zone
-    handleDragLeave(e) {
+        dropZone.classList.add('drag-over');
+    });
+    
+    dropZone.addEventListener('dragleave', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('drag-over');
-    }
-
-    // Handle file drop event
-    handleDrop(e) {
+        dropZone.classList.remove('drag-over');
+    });
+    
+    dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        document.getElementById('dropZone').classList.remove('drag-over');
+        dropZone.classList.remove('drag-over');
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            uploadFiles(files);
+        }
+    });
+    
+    // Search input
+    var searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('input', function() {
+        var query = searchInput.value;
+        filterFiles(query);
+    });
+    
+    // Notification close button
+    var notificationClose = document.getElementById('notificationClose');
+    notificationClose.addEventListener('click', function() {
+        hideNotification();
+    });
+}
 
-        const files = Array.from(e.dataTransfer.files);
-        this.handleFileSelect(files);
-    }
+// ============================================
+// LOAD FILES FROM SERVER
+// ============================================
 
-    // Process selected files for upload
-    handleFileSelect(files) {
-        if (files.length === 0) return;
-
-        Array.from(files).forEach(file => {
-            this.uploadFile(file);
+function loadFiles() {
+    var url = '/api/files?storage=' + currentStorage;
+    
+    fetch(url)
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Failed to load files');
+            }
+            return response.json();
+        })
+        .then(function(files) {
+            if (!files) {
+                files = [];
+            }
+            allFiles = files;
+            displayFiles(files);
+            updateFileCount(files.length);
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            showNotification('Failed to load files', 'error');
         });
+}
+
+// ============================================
+// DISPLAY FILES IN TABLE
+// ============================================
+
+function displayFiles(files) {
+    var filesList = document.getElementById('filesList');
+    var filesTable = document.getElementById('filesTable');
+    var emptyState = document.getElementById('emptyState');
+    
+    // Clear existing content
+    filesList.innerHTML = '';
+    
+    // Show empty state if no files
+    if (files.length === 0) {
+        filesTable.style.display = 'none';
+        emptyState.hidden = false;
+        return;
     }
-
-    // Upload a single file to the server
-    async uploadFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        // Add storage type parameter
-        const url = `${this.apiBase}/upload?storage=${this.currentStorage}`;
-
-        try {
-            this.showUploadProgress(true);
-
-            const response = await fetch(url, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                this.showNotification(`File "${file.name}" uploaded successfully`, 'success');
-                this.loadFiles(); // Refresh file list
-            } else {
-                const error = await response.text();
-                this.showNotification(`Upload failed: ${error}`, 'error');
-            }
-        } catch (error) {
-            this.showNotification(`Upload error: ${error.message}`, 'error');
-        } finally {
-            this.showUploadProgress(false);
-        }
-    }
-
-    // Load files from the server based on current storage type
-    async loadFiles() {
-        try {
-            const url = `${this.apiBase}/files?storage=${this.currentStorage}`;
-            const response = await fetch(url);
-
-            if (response.ok) {
-                this.files = await response.json() || [];
-                this.renderFiles(this.files);
-                this.updateFileCount(this.files.length);
-            } else {
-                this.showNotification('Failed to load files', 'error');
-            }
-        } catch (error) {
-            this.showNotification(`Error loading files: ${error.message}`, 'error');
-        }
-    }
-
-    // Filter files based on search query
-    filterFiles(query) {
-        if (!query.trim()) {
-            this.renderFiles(this.files);
-            return;
-        }
-
-        const filtered = this.files.filter(file =>
-            file.name.toLowerCase().includes(query.toLowerCase())
-        );
-        this.renderFiles(filtered);
-    }
-
-    // Render files in the table
-    renderFiles(files) {
-        const filesList = document.getElementById('filesList');
-        const emptyState = document.getElementById('emptyState');
-        const filesTable = document.getElementById('filesTable');
-
-        if (files.length === 0) {
-            filesTable.style.display = 'none';
-            emptyState.style.display = 'block';
-            return;
-        }
-
-        filesTable.style.display = 'table';
-        emptyState.style.display = 'none';
-
-        filesList.innerHTML = files.map(file => `
-            <tr>
-                <td class="file-name">
-                    <span class="file-icon">${this.getFileIcon(file.name)}</span>
-                    ${file.name}
-                </td>
-                <td class="file-size">${this.formatFileSize(file.size)}</td>
-                <td class="file-date">${this.formatDate(file.modified)}</td>
-                <td class="file-actions">
-                    <button class="btn btn-sm" onclick="fileManager.downloadFile('${file.name}')">
-                        Download
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="fileManager.deleteFile('${file.name}')">
-                        Delete
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    // Download a file from the server
-    async downloadFile(filename) {
-        try {
-            const url = `${this.apiBase}/files/${encodeURIComponent(filename)}?storage=${this.currentStorage}`;
-            const response = await fetch(url);
-
-            if (response.ok) {
-                const blob = await response.blob();
-                const downloadUrl = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(downloadUrl);
-
-                this.showNotification(`File "${filename}" downloaded`, 'success');
-            } else {
-                this.showNotification('Download failed', 'error');
-            }
-        } catch (error) {
-            this.showNotification(`Download error: ${error.message}`, 'error');
-        }
-    }
-
-    // Delete a file from the server
-    async deleteFile(filename) {
-        if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
-            return;
-        }
-
-        try {
-            const url = `${this.apiBase}/files/${encodeURIComponent(filename)}?storage=${this.currentStorage}`;
-            const response = await fetch(url, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                this.showNotification(`File "${filename}" deleted`, 'success');
-                this.loadFiles(); // Refresh file list
-            } else {
-                this.showNotification('Delete failed', 'error');
-            }
-        } catch (error) {
-            this.showNotification(`Delete error: ${error.message}`, 'error');
-        }
-    }
-
-    // Show or hide upload progress indicator
-    showUploadProgress(show) {
-        const progressElement = document.getElementById('uploadProgress');
-        progressElement.hidden = !show;
-    }
-
-    // Display notification message to user
-    showNotification(message, type = 'info') {
-        const notification = document.getElementById('notification');
-        const notificationText = document.getElementById('notificationText');
-
-        notificationText.textContent = message;
-        notification.className = `notification ${type}`;
-        notification.hidden = false;
-
-        // Auto-hide success notifications after 3 seconds
-        if (type === 'success') {
-            setTimeout(() => this.hideNotification(), 3000);
-        }
-    }
-
-    // Hide notification
-    hideNotification() {
-        document.getElementById('notification').hidden = true;
-    }
-
-    // Update file count display
-    updateFileCount(count) {
-        const fileCount = document.getElementById('fileCount');
-        fileCount.textContent = `${count} file${count !== 1 ? 's' : ''}`;
-    }
-
-    // Get appropriate icon for file type using simple text symbols
-    getFileIcon(filename) {
-        const extension = filename.split('.').pop().toLowerCase();
-        const iconMap = {
-            // Images
-            'jpg': '[IMG]', 'jpeg': '[IMG]', 'png': '[IMG]', 'gif': '[IMG]', 'svg': '[IMG]',
-            // Documents
-            'pdf': '[PDF]', 'doc': '[DOC]', 'docx': '[DOC]', 'txt': '[TXT]',
-            // Code files
-            'js': '[JS]', 'html': '[HTML]', 'css': '[CSS]', 'json': '[JSON]',
-            'py': '[PY]', 'java': '[JAVA]', 'cpp': '[CPP]', 'c': '[C]',
-            // Archives
-            'zip': '[ZIP]', 'rar': '[RAR]', 'tar': '[TAR]', 'gz': '[GZ]',
-            // Media
-            'mp4': '[VID]', 'avi': '[VID]', 'mp3': '[AUD]', 'wav': '[AUD]'
-        };
-        return iconMap[extension] || '[FILE]';
-    }
-
-    // Format file size in human-readable format
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
-
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
-
-    // Format date for display
-    formatDate(dateString) {
-        if (!dateString) return 'Unknown';
-
-        const date = new Date(dateString);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+    
+    // Show table, hide empty state
+    filesTable.style.display = 'table';
+    emptyState.hidden = true;
+    
+    // Create a row for each file
+    for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        var row = createFileRow(file);
+        filesList.appendChild(row);
     }
 }
 
-// Initialize the file manager when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.fileManager = new FileManager();
-});
+// ============================================
+// CREATE HTML ROW FOR A FILE
+// ============================================
+
+function createFileRow(file) {
+    var row = document.createElement('tr');
+    
+    // Column 1: File name
+    var nameCell = document.createElement('td');
+    nameCell.textContent = file.name;
+    row.appendChild(nameCell);
+    
+    // Column 2: File size
+    var sizeCell = document.createElement('td');
+    sizeCell.textContent = formatFileSize(file.size);
+    row.appendChild(sizeCell);
+    
+    // Column 3: Modified date
+    var dateCell = document.createElement('td');
+    dateCell.textContent = formatDate(file.modTime);
+    row.appendChild(dateCell);
+    
+    // Column 4: Actions (download/delete buttons)
+    var actionsCell = document.createElement('td');
+    actionsCell.className = 'file-actions';
+    
+    var downloadBtn = document.createElement('button');
+    downloadBtn.className = 'btn btn-primary';
+    downloadBtn.textContent = 'Download';
+    downloadBtn.onclick = function() {
+        downloadFile(file.name);
+    };
+    
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = function() {
+        deleteFile(file.name);
+    };
+    
+    actionsCell.appendChild(downloadBtn);
+    actionsCell.appendChild(deleteBtn);
+    row.appendChild(actionsCell);
+    
+    return row;
+}
+
+// ============================================
+// UPLOAD FILES
+// ============================================
+
+function uploadFiles(files) {
+    showUploadProgress(true);
+    
+    // Upload each file one by one
+    for (var i = 0; i < files.length; i++) {
+        uploadSingleFile(files[i]);
+    }
+}
+
+function uploadSingleFile(file) {
+    var formData = new FormData();
+    formData.append('file', file);
+    formData.append('storage', currentStorage);
+    
+    var progressText = document.getElementById('progressText');
+    progressText.textContent = 'Uploading ' + file.name + '...';
+    
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            showNotification('Uploaded ' + file.name, 'success');
+            loadFiles();
+        } else {
+            showNotification('Failed to upload ' + file.name, 'error');
+        }
+    })
+    .catch(function(error) {
+        console.error('Upload error:', error);
+        showNotification('Error uploading ' + file.name, 'error');
+    })
+    .finally(function() {
+        showUploadProgress(false);
+        // Clear file input
+        document.getElementById('fileInput').value = '';
+    });
+}
+
+// ============================================
+// DOWNLOAD FILE
+// ============================================
+
+function downloadFile(filename) {
+    var url = '/api/files/' + encodeURIComponent(filename) + '?storage=' + currentStorage;
+    window.location.href = url;
+    showNotification('Downloading ' + filename, 'success');
+}
+
+// ============================================
+// DELETE FILE
+// ============================================
+
+function deleteFile(filename) {
+    var confirmDelete = confirm('Delete ' + filename + '?');
+    if (!confirmDelete) {
+        return;
+    }
+    
+    var url = '/api/files/' + encodeURIComponent(filename) + '?storage=' + currentStorage;
+    
+    fetch(url, {
+        method: 'DELETE'
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            showNotification('Deleted ' + filename, 'success');
+            loadFiles();
+        } else {
+            showNotification('Failed to delete ' + filename, 'error');
+        }
+    })
+    .catch(function(error) {
+        console.error('Delete error:', error);
+        showNotification('Error deleting file', 'error');
+    });
+}
+
+// ============================================
+// FILTER FILES (SEARCH)
+// ============================================
+
+function filterFiles(query) {
+    if (!query) {
+        displayFiles(allFiles);
+        return;
+    }
+    
+    query = query.toLowerCase();
+    var filtered = [];
+    
+    for (var i = 0; i < allFiles.length; i++) {
+        var filename = allFiles[i].name.toLowerCase();
+        if (filename.indexOf(query) !== -1) {
+            filtered.push(allFiles[i]);
+        }
+    }
+    
+    displayFiles(filtered);
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function formatFileSize(bytes) {
+    if (bytes === 0) {
+        return '0 Bytes';
+    }
+    
+    var k = 1024;
+    var sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    var size = bytes / Math.pow(k, i);
+    
+    return Math.round(size * 100) / 100 + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    if (!dateString) {
+        return 'Unknown';
+    }
+    
+    var date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function updateFileCount(count) {
+    var fileCount = document.getElementById('fileCount');
+    var text = count + ' file';
+    if (count !== 1) {
+        text = text + 's';
+    }
+    fileCount.textContent = text;
+}
+
+// ============================================
+// UI FEEDBACK FUNCTIONS
+// ============================================
+
+function showUploadProgress(show) {
+    var progress = document.getElementById('uploadProgress');
+    progress.hidden = !show;
+}
+
+function showNotification(message, type) {
+    var notification = document.getElementById('notification');
+    var notificationText = document.getElementById('notificationText');
+    
+    notificationText.textContent = message;
+    notification.className = 'notification ' + type;
+    notification.hidden = false;
+    
+    // Auto-hide after 3 seconds
+    setTimeout(function() {
+        hideNotification();
+    }, 3000);
+}
+
+function hideNotification() {
+    var notification = document.getElementById('notification');
+    notification.hidden = true;
+}
